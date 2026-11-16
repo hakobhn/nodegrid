@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: nodegrid
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+nodegrid:
+  # master | worker  (fixed at startup; use the "master" / "worker" profiles or override here)
+  role: master
+  # Display name; defaults to the host name when empty
+  node-name: ""
+  # URL other nodes use to reach this node. Empty = http://<host-ip>:<server.port>
+  advertised-url: ""
+  # Worker only: where the master lives
+  master-url: http://localhost:8080
+  # Master: how often worker resources are polled
+  poll-interval-seconds: 10
+  # Worker: how often it (re-)registers with the master
+  heartbeat-interval-seconds: 15
+  # HTTP read timeout for node-to-node calls
+  request-timeout-seconds: 5
+  # Master: consecutive failed polls before a worker is marked OFFLINE
+  offline-after-failures: 3
+  # Where runtime-edited settings and the worker list are stored
+  data-dir: data
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  file:
+    name: logs/nodegrid-${nodegrid.role}-${server.port}.log

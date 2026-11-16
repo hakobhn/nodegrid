@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NodeGrid</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="logo">◆</span> NodeGrid
+        <span id="role-badge" class="badge">…</span>
+    </div>
+    <div class="node-id">
+        <span id="node-name">…</span>
+        <span class="muted" id="node-url"></span>
+    </div>
+</header>
+
+<nav class="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab master-only hidden" data-tab="workers">Workers</button>
+    <button class="tab" data-tab="settings">Settings</button>
+</nav>
+
+<main>
+    <!-- Overview: this node's resources -->
+    <section id="tab-overview" class="tab-panel">
+        <div id="master-link" class="card worker-only hidden"></div>
+        <div id="cluster-summary" class="grid master-only hidden"></div>
+        <h2>This node</h2>
+        <div id="local-resources"></div>
+    </section>
+
+    <!-- Workers (master only) -->
+    <section id="tab-workers" class="tab-panel hidden">
+        <div class="toolbar">
+            <form id="add-worker-form" class="inline-form">
+                <input id="add-worker-url" type="text" placeholder="http://worker-host:8081" required>
+                <button type="submit">Add worker</button>
+            </form>
+            <span class="muted" id="last-cycle"></span>
+        </div>
+        <div class="table-wrap">
+            <table class="workers">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
+                    <th>Disk</th>
+                    <th>Cores</th>
+                    <th>Last seen</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="workers-body"></tbody>
+            </table>
+        </div>
+        <div id="worker-details" class="hidden"></div>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="tab-panel hidden">
+        <form id="settings-form" class="card settings">
+            <label>Node name
+                <input name="nodeName" required>
+            </label>
+            <label>Advertised URL <small>(how other nodes reach this one; empty = auto)</small>
+                <input name="advertisedUrl" placeholder="auto">
+            </label>
+            <label class="worker-only hidden">Master URL
+                <input name="masterUrl">
+            </label>
+            <label class="master-only hidden">Poll interval (seconds)
+                <input name="pollIntervalSeconds" type="number" min="1" max="3600" required>
+            </label>
+            <label class="worker-only hidden">Heartbeat interval (seconds)
+                <input name="heartbeatIntervalSeconds" type="number" min="1" max="3600" required>
+            </label>
+            <label>Request timeout (seconds)
+                <input name="requestTimeoutSeconds" type="number" min="1" max="300" required>
+            </label>
+            <label class="master-only hidden">Mark worker offline after N failed polls
+                <input name="offlineAfterFailures" type="number" min="1" max="100" required>
+            </label>
+            <div class="actions">
+                <button type="submit">Save</button>
+                <button type="button" id="reset-settings" class="secondary">Reset to defaults</button>
+                <span id="settings-msg" class="muted"></span>
+            </div>
+        </form>
+    </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>

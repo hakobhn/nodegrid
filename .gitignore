@@ -1,3 +1,18 @@
+# Build output / bundles
+target/
+dist/
+.jre-cache/
+
+# Runtime data written by the app
+data/
+logs/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
 # Compiled class file
 *.class
 

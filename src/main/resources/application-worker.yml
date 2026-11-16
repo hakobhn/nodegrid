@@ -1,0 +1,6 @@
+server:
+  port: 8081
+
+nodegrid:
+  role: worker
+  master-url: http://localhost:8080

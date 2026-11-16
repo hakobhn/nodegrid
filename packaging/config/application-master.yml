@@ -1,0 +1,14 @@
+# Master node configuration. Overrides the defaults packaged in nodegrid.jar.
+# Values marked (runtime) can also be changed from the Settings page; once changed there,
+# the saved value in data/ wins until you press "Reset to defaults".
+
+server:
+  port: 8080
+
+nodegrid:
+  role: master
+  # node-name: master-1                # (runtime) default: <hostname>:<port>
+  # advertised-url: http://10.0.0.5:8080 # (runtime) default: http://<host-ip>:<port>
+  # poll-interval-seconds: 10           # (runtime)
+  # request-timeout-seconds: 5          # (runtime)
+  # offline-after-failures: 3           # (runtime)

@@ -1,0 +1,17 @@
+# Worker node configuration. Overrides the defaults packaged in nodegrid.jar.
+# Values marked (runtime) can also be changed from the Settings page; once changed there,
+# the saved value in data/ wins until you press "Reset to defaults".
+
+server:
+  port: 8081
+
+nodegrid:
+  role: worker
+  # Address of the master node                                 (runtime)
+  master-url: http://localhost:8080
+  # How the master should reach this worker. Set it when the auto-detected IP is wrong
+  # (multiple network cards, NAT, containers).                 (runtime)
+  # advertised-url: http://10.0.0.6:8081
+  # node-name: worker-1                 # (runtime) default: <hostname>:<port>
+  # heartbeat-interval-seconds: 15      # (runtime)
+  # request-timeout-seconds: 5          # (runtime)
