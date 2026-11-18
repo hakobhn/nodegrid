@@ -124,6 +124,47 @@ function renderMasterLink(info) {
         </dl>`;
 }
 
+function renderConnect(info) {
+    const url = info.advertisedUrl;
+    const isMaster = info.role === 'MASTER';
+    const masterForm = isMaster ? '' : `<div class="label">Master URL — paste the URL shown on the master's Overview page</div>
+        <form id="master-url-form" class="copy-row">
+            <input id="master-url-input" type="url" required placeholder="http://master-host:8080"
+                   value="${esc(info.masterLink?.masterUrl)}">
+            <button type="submit">Connect</button>
+        </form>
+        <hr>`;
+    const label = isMaster ? 'Master URL — give this to workers to connect' : 'Worker URL — add this on the master to connect manually';
+    const hint = isMaster
+        ? `On a worker: set <code>nodegrid.master-url: ${esc(url)}</code> in <code>config/application-worker.yml</code>,
+           run <code>start-worker --nodegrid.master-url=${esc(url)}</code>, or paste it in the worker's Settings → Master URL.`
+        : `On the master: Workers → Add worker. Normally not needed, the worker registers itself with its master.`;
+    const local = /\/\/(localhost|127\.|\[::1\])/.test(url)
+        ? `<div class="hint error-text">This URL is local-only. Set “Advertised URL” in Settings so other machines can reach this node.</div>` : '';
+    return `${masterForm}<div class="label">${label}</div>
+        <div class="copy-row">
+            <code id="connect-url">${esc(url)}</code>
+            <button class="small" type="button" data-copy="${esc(url)}">Copy</button>
+        </div>
+        <div class="hint">${hint}</div>${local}`;
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        // clipboard API needs a secure context (https/localhost); fall back for http://<ip>
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+    }
+}
+
 function renderSummary(s) {
     const memUsed = usedPct(s.totalMemoryBytes, s.freeMemoryBytes);
     return [
@@ -190,6 +231,10 @@ async function refresh() {
         document.title = `NodeGrid · ${info.nodeName}`;
 
         if (state.tab === 'overview') {
+            const connect = renderConnect(info);
+            if (connect !== state.connectHtml) {
+                $('#connect-info').innerHTML = state.connectHtml = connect;
+            }
             const res = await api('GET', '/api/node/resources');
             $('#local-resources').innerHTML = renderResources(res);
             if (info.role === 'MASTER') {
@@ -234,6 +279,31 @@ function switchTab(tab) {
 
 // ---------- events ----------
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+$('#connect-info').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-copy]');
+    if (!btn) return;
+    await copyText(btn.dataset.copy);
+    toast(`Copied ${btn.dataset.copy}`);
+});
+
+$('#connect-info').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'master-url-form') return;
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    try {
+        const s = await api('GET', '/api/node/settings');
+        await api('PUT', '/api/node/settings', { ...s, masterUrl: $('#master-url-input').value.trim() });
+        toast('Master URL saved, connecting…');
+        // saving triggers an immediate heartbeat; give it a moment before showing the result
+        setTimeout(refresh, 1500);
+    } catch (err) {
+        toast(err.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 $('#workers-body').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
