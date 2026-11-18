@@ -108,6 +108,19 @@ table.workers td.empty { text-align: center; color: var(--muted); padding: 24px;
 .status.OFFLINE::before { background: var(--bad); }
 
 #worker-details { margin-top: 16px; }
+
+.connect { margin-bottom: 12px; }
+.connect .label { color: var(--muted); font-size: 12px; }
+.copy-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.copy-row code {
+    font: 15px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; padding: 5px 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; word-break: break-all;
+}
+.connect hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+#master-url-input { width: 320px; max-width: 100%; }
+.connect .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.connect .hint code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+#master-link { margin-bottom: 12px; }
 .error-text { color: var(--bad); white-space: normal; word-break: break-word; }
 
 .settings { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
