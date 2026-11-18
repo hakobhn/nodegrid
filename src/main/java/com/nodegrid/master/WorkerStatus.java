@@ -1,12 +1,12 @@
 package com.nodegrid.master;
 
 public enum WorkerStatus {
-    /** Known but not polled yet. */
+    /** Known (e.g. loaded from disk) but has not reported since the master started. */
     UNKNOWN,
-    /** Last poll succeeded. */
+    /** Reported within its heartbeat interval. */
     ONLINE,
-    /** Recent polls failed, but fewer than the offline threshold. */
+    /** Missed at least one heartbeat, but fewer than the offline threshold. */
     UNREACHABLE,
-    /** Failed polls reached the offline threshold. */
+    /** Missed heartbeats reached the offline threshold. */
     OFFLINE
 }

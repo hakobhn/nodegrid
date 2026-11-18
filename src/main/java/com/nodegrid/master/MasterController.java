@@ -1,7 +1,6 @@
 package com.nodegrid.master;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,21 +14,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Master-only API for managing and monitoring workers. */
+/**
+ * Master-only API: receives worker heartbeats and serves the worker list. The master never calls out to workers;
+ * see {@link CommandController} for sending requests to them.
+ */
 @RestController
 @RequestMapping("/api/master")
 @ConditionalOnProperty(prefix = "nodegrid", name = "role", havingValue = "master", matchIfMissing = true)
 public class MasterController {
 
     private final WorkerRegistry registry;
-    private final WorkerPoller poller;
+    private final CommandQueue commands;
 
-    public MasterController(WorkerRegistry registry, WorkerPoller poller) {
+    public MasterController(WorkerRegistry registry, CommandQueue commands) {
         this.registry = registry;
-        this.poller = poller;
-    }
-
-    public record AddWorkerRequest(@NotBlank String url) {
+        this.commands = commands;
     }
 
     @GetMapping("/workers")
@@ -42,30 +41,18 @@ public class MasterController {
         return registry.get(id);
     }
 
-    /** Manually add a worker by URL. The master contacts it immediately to verify it. */
-    @PostMapping("/workers")
-    @ResponseStatus(HttpStatus.CREATED)
-    public WorkerView add(@Valid @RequestBody AddWorkerRequest request) {
-        WorkerView added = registry.addManual(request.url());
-        return poller.pollNow(added.id());
-    }
-
-    /** Called by workers on startup and on every heartbeat. */
+    /** Called by workers on startup and on every heartbeat; carries the worker's resources. */
     @PostMapping("/workers/register")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void register(@Valid @RequestBody RegistrationRequest request) {
-        registry.register(request);
-    }
-
-    @PostMapping("/workers/{id}/poll")
-    public WorkerView pollNow(@PathVariable String id) {
-        return poller.pollNow(id);
+        registry.report(request);
     }
 
     @DeleteMapping("/workers/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@PathVariable String id) {
         registry.remove(id);
+        commands.forget(id);
     }
 
     @GetMapping("/summary")
@@ -93,7 +80,6 @@ public class MasterController {
             }
         }
         double avgCpu = cpuSamples == 0 ? -1 : Math.round(cpuSum / cpuSamples * 10.0) / 10.0;
-        return new ClusterSummary(all.size(), online, unreachable, offline, unknown, cores, totalMem, freeMem,
-                avgCpu, poller.lastCycle());
+        return new ClusterSummary(all.size(), online, unreachable, offline, unknown, cores, totalMem, freeMem, avgCpu);
     }
 }

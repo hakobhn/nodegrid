@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.nodegrid.config.NodeProperties;
 import com.nodegrid.config.NodeRole;
+import com.nodegrid.node.HostAddressResolver;
 import com.nodegrid.node.ResourceCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -77,13 +77,7 @@ public class SettingsService {
         if (url != null && !url.isBlank()) {
             return stripSlash(url.trim());
         }
-        String host;
-        try {
-            host = InetAddress.getLocalHost().getHostAddress();
-        } catch (Exception e) {
-            host = "localhost";
-        }
-        return "http://" + host + ":" + serverPort;
+        return "http://" + HostAddressResolver.resolve() + ":" + serverPort;
     }
 
     public synchronized NodeSettings update(NodeSettings updated) {
@@ -94,7 +88,6 @@ public class SettingsService {
                 updated.nodeName().trim(),
                 blankToEmpty(updated.advertisedUrl()),
                 stripSlash(blankToEmpty(updated.masterUrl())),
-                updated.pollIntervalSeconds(),
                 updated.heartbeatIntervalSeconds(),
                 updated.requestTimeoutSeconds(),
                 updated.offlineAfterFailures());
@@ -118,7 +111,6 @@ public class SettingsService {
                 name,
                 blankToEmpty(props.advertisedUrl()),
                 stripSlash(blankToEmpty(props.masterUrl())),
-                props.pollIntervalSeconds(),
                 props.heartbeatIntervalSeconds(),
                 props.requestTimeoutSeconds(),
                 props.offlineAfterFailures());

@@ -7,11 +7,10 @@ server:
 
 nodegrid:
   role: worker
-  # Address of the master node                                 (runtime)
+  # Master URL, as shown on the master's Overview page.        (runtime)
+  # The worker opens every connection (heartbeat + command long-poll), so only the master
+  # has to be reachable from here; nothing needs to connect to this worker.
   master-url: http://localhost:8080
-  # How the master should reach this worker. Set it when the auto-detected IP is wrong
-  # (multiple network cards, NAT, containers).                 (runtime)
-  # advertised-url: http://10.0.0.6:8081
   # node-name: worker-1                 # (runtime) default: <hostname>:<port>
   # heartbeat-interval-seconds: 15      # (runtime)
   # request-timeout-seconds: 5          # (runtime)
