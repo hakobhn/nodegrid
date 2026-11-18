@@ -17,8 +17,10 @@ Web UI
   Master:  http://<host>:8080   - cluster overview, worker list, settings
   Worker:  http://<host>:8081   - local resources, master connection, settings
 
-Workers register themselves with the master (nodegrid.master-url) and the master polls
-each worker's resources periodically. Workers can also be added by URL from the master UI.
+The master's Overview page shows its URL. Paste it on a worker's Overview page, or set
+nodegrid.master-url. The worker connects to the master, reports its resources and fetches
+commands from it. The master never connects to workers, so only the master's port (8080)
+has to be reachable from the workers.
 
 Files
 -----

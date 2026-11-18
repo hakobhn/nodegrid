@@ -9,6 +9,4 @@ nodegrid:
   role: master
   # node-name: master-1                # (runtime) default: <hostname>:<port>
   # advertised-url: http://10.0.0.5:8080 # (runtime) default: http://<host-ip>:<port>
-  # poll-interval-seconds: 10           # (runtime)
-  # request-timeout-seconds: 5          # (runtime)
-  # offline-after-failures: 3           # (runtime)
+  # offline-after-failures: 3           # (runtime) missed worker heartbeats before OFFLINE

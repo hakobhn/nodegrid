@@ -126,27 +126,26 @@ function renderMasterLink(info) {
 
 function renderConnect(info) {
     const url = info.advertisedUrl;
-    const isMaster = info.role === 'MASTER';
-    const masterForm = isMaster ? '' : `<div class="label">Master URL — paste the URL shown on the master's Overview page</div>
-        <form id="master-url-form" class="copy-row">
-            <input id="master-url-input" type="url" required placeholder="http://master-host:8080"
-                   value="${esc(info.masterLink?.masterUrl)}">
-            <button type="submit">Connect</button>
-        </form>
-        <hr>`;
-    const label = isMaster ? 'Master URL — give this to workers to connect' : 'Worker URL — add this on the master to connect manually';
-    const hint = isMaster
-        ? `On a worker: set <code>nodegrid.master-url: ${esc(url)}</code> in <code>config/application-worker.yml</code>,
-           run <code>start-worker --nodegrid.master-url=${esc(url)}</code>, or paste it in the worker's Settings → Master URL.`
-        : `On the master: Workers → Add worker. Normally not needed, the worker registers itself with its master.`;
+    if (info.role !== 'MASTER') {
+        return `<div class="label">Master URL: paste the URL shown on the master's Overview page</div>
+            <form id="master-url-form" class="copy-row">
+                <input id="master-url-input" type="url" required placeholder="http://master-host:8080"
+                       value="${esc(info.masterLink?.masterUrl)}">
+                <button type="submit">Connect</button>
+            </form>
+            <div class="hint">The worker opens every connection to the master (heartbeats and commands),
+                so only the master has to be reachable from this machine.</div>`;
+    }
     const local = /\/\/(localhost|127\.|\[::1\])/.test(url)
-        ? `<div class="hint error-text">This URL is local-only. Set “Advertised URL” in Settings so other machines can reach this node.</div>` : '';
-    return `${masterForm}<div class="label">${label}</div>
+        ? `<div class="hint error-text">This URL is local-only. Set “Master URL shown to workers” in Settings so other machines can reach this node.</div>` : '';
+    return `<div class="label">Master URL: give this to workers to connect</div>
         <div class="copy-row">
             <code id="connect-url">${esc(url)}</code>
             <button class="small" type="button" data-copy="${esc(url)}">Copy</button>
         </div>
-        <div class="hint">${hint}</div>${local}`;
+        <div class="hint">On a worker: paste it on the worker's Overview page, set <code>nodegrid.master-url: ${esc(url)}</code>
+           in <code>config/application-worker.yml</code>, or run <code>start-worker --nodegrid.master-url=${esc(url)}</code>.
+           Workers connect to the master; the master never connects to workers.</div>${local}`;
 }
 
 async function copyText(text) {
@@ -171,15 +170,15 @@ function renderSummary(s) {
         stat('Workers', `${s.online} / ${s.totalWorkers}`, `online · ${s.unreachable} unreachable · ${s.offline} offline`),
         stat('Cluster CPU (avg)', pct(s.averageCpuLoadPercent), `${s.totalCores} cores online`, s.averageCpuLoadPercent),
         stat('Cluster memory', pct(memUsed), `${bytes(s.totalMemoryBytes - s.freeMemoryBytes)} used of ${bytes(s.totalMemoryBytes)}`, memUsed),
-        stat('Last poll cycle', s.lastPollCycle ? ago(s.lastPollCycle) : 'pending'),
     ].join('');
 }
 
 function renderWorkers(workers) {
     const body = $('#workers-body');
     if (!workers.length) {
-        body.innerHTML = `<tr><td colspan="8" class="empty">No workers yet. Start a worker pointing to this master, or add one by URL.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8" class="empty">No workers yet. Start a worker and give it this master's URL (see Overview).</td></tr>`;
         $('#worker-details').classList.add('hidden');
+        state.detailsFor = null;
         return;
     }
     body.innerHTML = workers.map(w => {
@@ -188,17 +187,14 @@ function renderWorkers(workers) {
         const disk = mainDisk(r);
         const diskUsed = disk ? usedPct(disk.totalBytes, disk.usableBytes) : -1;
         return `<tr data-id="${esc(w.id)}" class="${w.id === state.selectedWorker ? 'selected' : ''}">
-            <td><strong>${esc(w.name)}</strong><br><span class="muted">${esc(w.url)}</span></td>
+            <td><strong>${esc(w.name)}</strong><br><span class="muted">${esc(r?.hostname ?? '')}</span></td>
             <td><span class="status ${w.status}">${w.status}</span></td>
             <td>${pct(r?.systemCpuLoadPercent)}${bar(r?.systemCpuLoadPercent)}</td>
             <td>${pct(memUsed)}${bar(memUsed)}</td>
             <td>${pct(diskUsed)}${bar(diskUsed)}</td>
             <td>${r?.availableProcessors ?? '–'}</td>
-            <td>${ago(w.lastSeen)}</td>
-            <td>
-                <button class="small" data-action="poll" data-id="${esc(w.id)}">Refresh</button>
-                <button class="small danger" data-action="remove" data-id="${esc(w.id)}">Remove</button>
-            </td>
+            <td>${ago(w.lastHeartbeat)}</td>
+            <td><button class="small danger" data-action="remove" data-id="${esc(w.id)}">Remove</button></td>
         </tr>`;
     }).join('');
 
@@ -206,19 +202,62 @@ function renderWorkers(workers) {
     const details = $('#worker-details');
     if (!selected) {
         details.classList.add('hidden');
+        state.detailsFor = null;
         return;
     }
     details.classList.remove('hidden');
-    details.innerHTML = `<h2>${esc(selected.name)} <span class="status ${selected.status}">${selected.status}</span></h2>
-        <div class="card" style="margin-bottom:12px"><dl class="kv">
+    // The command form is rendered once per worker so the 5s refresh doesn't wipe what the user is typing.
+    const types = selected.commandTypes || [];
+    const formKey = selected.id + '|' + types.join(',');
+    if (state.detailsFor !== formKey) {
+        state.detailsFor = formKey;
+        details.innerHTML = `<h2 id="wd-title"></h2>
+            <div class="card" style="margin-bottom:12px" id="wd-info"></div>
+            <h2>Commands</h2>
+            <div class="card" style="margin-bottom:12px">
+                ${types.length ? `<form id="command-form" class="command-form">
+                    <label>Type
+                        <select name="type">${types.map(t => `<option>${esc(t)}</option>`).join('')}</select>
+                    </label>
+                    <label class="grow">Payload (JSON, optional)
+                        <input name="payload" placeholder='{"message": "hello"}'>
+                    </label>
+                    <button type="submit">Send</button>
+                </form>` : `<div class="muted">This worker has not reported any command types yet.</div>`}
+                <div id="wd-commands"></div>
+            </div>
+            <div id="wd-resources"></div>`;
+    }
+    $('#wd-title').innerHTML = `${esc(selected.name)} <span class="status ${selected.status}">${selected.status}</span>`;
+    $('#wd-info').innerHTML = `<dl class="kv">
             <dt>ID</dt><dd>${esc(selected.id)}</dd>
-            <dt>URL</dt><dd><a href="${esc(selected.url)}" target="_blank">${esc(selected.url)}</a></dd>
-            <dt>Joined via</dt><dd>${esc(selected.source.toLowerCase())}</dd>
-            <dt>Last poll</dt><dd>${ago(selected.lastPollAt)}</dd>
-            <dt>Last heartbeat</dt><dd>${ago(selected.lastHeartbeat)}</dd>
-            ${selected.lastError ? `<dt>Last error</dt><dd class="error-text">${esc(selected.lastError)} (${selected.consecutiveFailures} consecutive)</dd>` : ''}
-        </dl></div>
-        ${renderResources(selected.resources)}`;
+            ${selected.url ? `<dt>Worker UI</dt><dd><a href="${esc(selected.url)}" target="_blank">${esc(selected.url)}</a> <span class="muted">(may not be reachable from here)</span></dd>` : ''}
+            <dt>Last heartbeat</dt><dd>${ago(selected.lastHeartbeat)} <span class="muted">(every ${selected.heartbeatIntervalSeconds || '?'}s)</span></dd>
+            <dt>Commands</dt><dd>${types.length ? types.map(esc).join(', ') : '–'}</dd>
+            ${selected.lastError ? `<dt>Problem</dt><dd class="error-text">${esc(selected.lastError)}</dd>` : ''}
+        </dl>`;
+    $('#wd-resources').innerHTML = renderResources(selected.resources);
+}
+
+function renderCommands(list) {
+    const el = $('#wd-commands');
+    if (!el) return;
+    if (!list.length) {
+        el.innerHTML = '<div class="muted" style="margin-top:8px">No commands sent yet.</div>';
+        return;
+    }
+    el.innerHTML = `<table class="commands"><thead><tr>
+            <th>Sent</th><th>Type</th><th>Status</th><th>Result</th></tr></thead><tbody>
+        ${list.slice(0, 20).map(c => {
+            const out = c.error ?? (c.result != null ? JSON.stringify(c.result) : '');
+            return `<tr>
+                <td>${ago(c.createdAt)}</td>
+                <td>${esc(c.type)}</td>
+                <td><span class="cmd-status ${c.status}">${c.status}</span></td>
+                <td><code class="cmd-result ${c.error ? 'error-text' : ''}" title="${esc(out)}">${esc(out)}</code></td>
+            </tr>`;
+        }).join('')}
+        </tbody></table>`;
 }
 
 // ---------- data loading ----------
@@ -243,9 +282,11 @@ async function refresh() {
                 $('#master-link').innerHTML = renderMasterLink(info);
             }
         } else if (state.tab === 'workers' && info.role === 'MASTER') {
-            const [workers, summary] = await Promise.all([api('GET', '/api/master/workers'), api('GET', '/api/master/summary')]);
+            const workers = await api('GET', '/api/master/workers');
             renderWorkers(workers);
-            $('#last-cycle').textContent = summary.lastPollCycle ? `Last poll cycle ${ago(summary.lastPollCycle)}` : 'Waiting for first poll…';
+            if (state.selectedWorker && workers.some(w => w.id === state.selectedWorker)) {
+                renderCommands(await api('GET', `/api/master/workers/${encodeURIComponent(state.selectedWorker)}/commands`));
+            }
         }
     } catch (e) {
         toast(`Refresh failed: ${e.message}`, true);
@@ -312,10 +353,8 @@ $('#workers-body').addEventListener('click', async (e) => {
         const id = btn.dataset.id;
         btn.disabled = true;
         try {
-            if (btn.dataset.action === 'poll') {
-                await api('POST', `/api/master/workers/${encodeURIComponent(id)}/poll`);
-            } else if (btn.dataset.action === 'remove') {
-                if (!confirm('Remove this worker? A worker that registers itself will re-appear on its next heartbeat.')) return;
+            if (btn.dataset.action === 'remove') {
+                if (!confirm('Remove this worker? A running worker re-appears on its next heartbeat.')) return;
                 await api('DELETE', `/api/master/workers/${encodeURIComponent(id)}`);
                 if (state.selectedWorker === id) state.selectedWorker = null;
             }
@@ -334,16 +373,27 @@ $('#workers-body').addEventListener('click', async (e) => {
     }
 });
 
-$('#add-worker-form').addEventListener('submit', async (e) => {
+$('#worker-details').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'command-form') return;
     e.preventDefault();
-    const input = $('#add-worker-url');
+    const f = e.target.elements;
+    let payload = null;
+    if (f.payload.value.trim()) {
+        try {
+            payload = JSON.parse(f.payload.value);
+        } catch {
+            toast('Payload must be valid JSON', true);
+            return;
+        }
+    }
     const btn = e.target.querySelector('button');
     btn.disabled = true;
     try {
-        const w = await api('POST', '/api/master/workers', { url: input.value });
-        toast(`Added worker ${w.name}`);
-        input.value = '';
+        const c = await api('POST', `/api/master/workers/${encodeURIComponent(state.selectedWorker)}/commands`,
+            { type: f.type.value, payload });
+        toast(`Command ${c.type} queued`);
         await refresh();
+        setTimeout(refresh, 1000); // the worker usually answers within a second
     } catch (err) {
         toast(err.message, true);
     } finally {
@@ -360,7 +410,6 @@ $('#settings-form').addEventListener('submit', async (e) => {
             nodeName: f.nodeName.value,
             advertisedUrl: f.advertisedUrl.value,
             masterUrl: f.masterUrl.value,
-            pollIntervalSeconds: num('pollIntervalSeconds'),
             heartbeatIntervalSeconds: num('heartbeatIntervalSeconds'),
             requestTimeoutSeconds: num('requestTimeoutSeconds'),
             offlineAfterFailures: num('offlineAfterFailures'),

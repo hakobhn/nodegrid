@@ -1,7 +1,9 @@
 # NodeGrid
 
 One **master** node and many **worker** nodes, all from a single jar. Every node runs a web server with a
-management UI. The master keeps the list of workers and polls each worker's resources periodically.
+management UI. The master shows its URL; each worker is given that URL and connects to it. Workers report their
+resources to the master, and the master sends requests (commands) back over a connection the worker opened.
+Only the master has to be reachable on the network.
 
 Current scope: **resource monitoring** (CPU, memory, swap, JVM heap, disks, OS info).
 Next step: splitting tasks into parallel chunks and distributing them across workers (see [Roadmap](#roadmap)).
@@ -37,18 +39,25 @@ don't need to install Java. See [packaging/README.txt](packaging/README.txt) for
 ## How it works
 
 ```
-             ┌────────────── master :8080 ──────────────┐
-             │  WorkerRegistry ◄── POST /register ──────┼──── worker heartbeat (every 15s)
-             │  WorkerPoller   ─── GET /resources ──────┼───► each worker   (every 10s, parallel)
-             │  Web UI: overview · workers · settings   │
-             └──────────────────────────────────────────┘
+             ┌────────────── master :8080 ───────────────┐
+             │  WorkerRegistry ◄── POST /register ───────┼──── heartbeat + resources (every 15s)
+             │  CommandQueue   ◄── GET  /commands/next ──┼──── long-poll held open (≤25s), commands returned on it
+             │                 ◄── POST /…/result ───────┼──── command result
+             │  Web UI: overview · workers · settings    │          every arrow is opened by the worker
+             └───────────────────────────────────────────┘
 ```
 
-* **Joining:** a worker registers itself with `nodegrid.master-url` on startup and re-registers on every
-  heartbeat, so it reappears automatically after a master restart. You can also add a worker by URL in the master UI.
-* **Monitoring:** the master polls `GET /api/node/resources` on every worker in parallel, using virtual threads.
-  Each failure counts against the worker: it is marked `UNREACHABLE`, and after `offline-after-failures`
-  consecutive failures it becomes `OFFLINE`.
+* **Joining:** the master's Overview page shows its URL. Paste it on the worker's Overview page, or set
+  `nodegrid.master-url`. The worker registers on startup and on every heartbeat, so it reappears automatically
+  after a master restart.
+* **Monitoring:** every heartbeat carries the worker's resource snapshot. If a worker misses a heartbeat it is
+  marked `UNREACHABLE`. After `offline-after-failures` missed heartbeats it becomes `OFFLINE`.
+* **Commands (master → worker):** the master queues a command for a worker. The worker always keeps a long-poll
+  open on `/api/master/workers/{id}/commands/next`, so the command goes out right away on that connection.
+  The worker runs it with the matching `CommandHandler` bean and posts the result back. The master never
+  connects to a worker, so workers behind NAT or a firewall still work. Built-in commands: `ping` (echoes the
+  payload) and `resources`. To add a new kind of work, register another `CommandHandler` bean on the worker. It
+  is advertised to the master automatically.
 * **Settings:** the UI can change most settings at runtime. Changes are saved to
   `data/<role>-<port>/node.json` and override `application.yml` until you choose *Reset to defaults*.
   The role (master/worker) and the port are fixed at startup.
@@ -62,10 +71,13 @@ don't need to install Java. See [packaging/README.txt](packaging/README.txt) for
 | any | GET / PUT / DELETE | `/api/node/settings` | read / update / reset runtime settings |
 | master | GET | `/api/master/workers` | all workers with latest resources |
 | master | GET | `/api/master/workers/{id}` | one worker |
-| master | POST | `/api/master/workers` | add worker manually `{ "url": "http://host:8081" }` |
-| master | POST | `/api/master/workers/register` | worker self-registration / heartbeat |
-| master | POST | `/api/master/workers/{id}/poll` | poll one worker now |
+| master | POST | `/api/master/workers/register` | worker heartbeat (registration + resources + command types) |
 | master | DELETE | `/api/master/workers/{id}` | remove worker |
+| master | POST | `/api/master/workers/{id}/commands` | send a command `{ "type": "ping", "payload": {…}, "timeoutSeconds": 300 }` |
+| master | GET | `/api/master/workers/{id}/commands` | recent commands of a worker with status and result |
+| master | GET | `/api/master/commands/{commandId}` | one command |
+| master | GET | `/api/master/workers/{id}/commands/next?wait=25` | worker long-poll for commands |
+| master | POST | `/api/master/workers/{id}/commands/{commandId}/result` | worker reports a result |
 | master | GET | `/api/master/summary` | cluster totals |
 
 ## Project layout
@@ -75,9 +87,10 @@ src/main/java/com/nodegrid
 ├── config/     NodeProperties (nodegrid.*), NodeRole
 ├── node/       resource collection + /api/node endpoints (every node)
 ├── settings/   runtime-editable settings, persisted to data/
-├── client/     node-to-node HTTP client
-├── master/     worker registry, poller, /api/master endpoints   (role=master only)
-├── worker/     heartbeat/registration to master                  (role=worker only)
+├── client/     worker → master HTTP client
+├── command/    command DTOs + CommandHandler interface
+├── master/     worker registry, command queue, /api/master endpoints   (role=master only)
+├── worker/     heartbeat, command long-poll runner, built-in handlers  (role=worker only)
 └── web/        error handling
 src/main/resources/static/   web UI (plain HTML/JS/CSS)
 packaging/                   launch scripts + config shipped in the bundles
@@ -87,6 +100,7 @@ build-dist.sh / .cmd         bundle builder
 ## Roadmap
 
 - [ ] Task model: submit a job on the master, split it into parallel chunks, assign them to workers based on free resources
+- [x] Master → worker command channel (worker-initiated long-poll)
 - [ ] Worker task executor + progress reporting back to the master
 - [ ] Authentication between nodes (shared token) and for the UI
 - [ ] Resource history / charts

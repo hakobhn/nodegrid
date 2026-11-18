@@ -13,17 +13,15 @@ nodegrid:
   role: master
   # Display name; defaults to the host name when empty
   node-name: ""
-  # URL other nodes use to reach this node. Empty = http://<host-ip>:<server.port>
+  # URL of this node shown in the UI (on the master: the URL workers connect to). Empty = http://<lan-ip>:<server.port>
   advertised-url: ""
   # Worker only: where the master lives
   master-url: http://localhost:8080
-  # Master: how often worker resources are polled
-  poll-interval-seconds: 10
-  # Worker: how often it (re-)registers with the master
+  # Worker: how often it reports to the master (registration + resources)
   heartbeat-interval-seconds: 15
-  # HTTP read timeout for node-to-node calls
+  # Worker: HTTP read timeout for calls to the master (the command long-poll has its own, longer timeout)
   request-timeout-seconds: 5
-  # Master: consecutive failed polls before a worker is marked OFFLINE
+  # Master: missed heartbeats before a worker is marked OFFLINE
   offline-after-failures: 3
   # Where runtime-edited settings and the worker list are stored
   data-dir: data

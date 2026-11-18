@@ -13,7 +13,6 @@ public record NodeProperties(
         @DefaultValue("") String nodeName,
         @DefaultValue("") String advertisedUrl,
         @DefaultValue("http://localhost:8080") String masterUrl,
-        @DefaultValue("10") int pollIntervalSeconds,
         @DefaultValue("15") int heartbeatIntervalSeconds,
         @DefaultValue("5") int requestTimeoutSeconds,
         @DefaultValue("3") int offlineAfterFailures,
